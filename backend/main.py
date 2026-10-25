@@ -1211,12 +1211,14 @@ async def analyze_resume(
     try:
         db.add(history)
         db.commit()
-    except Exception:
+    except Exception as exc:
         db.rollback()
+        print(f"Database save error: {exc!r}")
         raise HTTPException(
             status_code=500,
             detail="Could not save the analysis to the database.",
-        )
+        ) from exc
+
 
     return result
 
