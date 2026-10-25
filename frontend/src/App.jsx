@@ -423,6 +423,121 @@ Responsibilities: Develop APIs, work with databases, and build web applications.
               </div>
 
 
+                <div className="skill-breakdowns">
+                  {[
+                    {
+                      title: "Resume Skill Categories",
+                      breakdown: results.resume_skill_breakdown,
+                    },
+                    {
+                      title: "Job Skill Categories",
+                      breakdown: results.job_skill_breakdown,
+                    },
+                  ].map(({ title, breakdown }) => (
+                    <section
+                      className="skill-breakdown-section"
+                      key={title}
+                    >
+                      <h3>{title}</h3>
+
+                      {breakdown &&
+                      Object.keys(breakdown).length > 0 ? (
+                        <div className="skill-category-grid">
+                          {Object.entries(breakdown).map(
+                            ([category, details]) => (
+                              <article
+                                className="skill-category-card"
+                                key={category}
+                              >
+                                <div className="skill-category-heading">
+                                  <h4>{category}</h4>
+
+                                  <span>
+                                    {details.count ??
+                                      details.skills?.length ??
+                                      0}{" "}
+                                    skills
+                                  </span>
+                                </div>
+
+                                <div className="skill-list">
+                                  {(details.skills ?? []).map(
+                                    (skill) => (
+                                      <span
+                                        className="skill-tag"
+                                        key={skill}
+                                      >
+                                        {skill}
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              </article>
+                            )
+                          )}
+                        </div>
+                      ) : (
+                        <p className="empty-state">
+                          No skill categories available.
+                        </p>
+                      )}
+                    </section>
+                  ))}
+                </div>
+
+
+                {results.ai_feedback && (
+                  <section className="ai-feedback-section">
+                    <div className="recommendations-heading">
+                      <span className="recommendations-icon">✦</span>
+                      <div>
+                        <h3>AI Resume Feedback</h3>
+                        <p>
+                          Personalized feedback based on your resume
+                          and the job description.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="ai-feedback-overall">
+                      <h4>Overall Feedback</h4>
+                      <p>
+                        {results.ai_feedback.overall_feedback ||
+                          "No overall feedback available."}
+                      </p>
+                    </div>
+
+                    {[
+                      {
+                        title: "Strengths",
+                        items: results.ai_feedback.strengths,
+                      },
+                      {
+                        title: "Areas for Improvement",
+                        items: results.ai_feedback.improvements,
+                      },
+                      {
+                        title: "Resume Tips",
+                        items: results.ai_feedback.resume_tips,
+                      },
+                    ].map(({ title, items }) => (
+                      <div className="ai-feedback-card" key={title}>
+                        <h4>{title}</h4>
+
+                        {Array.isArray(items) && items.length > 0 ? (
+                          <ul>
+                            {items.map((item, index) => (
+                              <li key={`${title}-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No items available.</p>
+                        )}
+                      </div>
+                    ))}
+                  </section>
+                )}
+
                 {results.recommendations?.length > 0 && (
                   <div className="recommendations-section">
                     <div className="recommendations-heading">

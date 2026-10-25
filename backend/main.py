@@ -14,6 +14,24 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import AnalysisHistory
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
+import json
+
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+groq_client = (
+    OpenAI(
+        api_key=GROQ_API_KEY,
+        base_url="https://api.groq.com/openai/v1",
+    )
+    if GROQ_API_KEY
+    else None
+)
+
 from fastapi.middleware.cors import CORSMiddleware
 from pypdf import PdfReader
 
@@ -55,6 +73,35 @@ SKILL_ALIASES = {
     "dart": ["dart"],
     "bash": ["bash", "bash scripting"],
     "powershell": ["powershell"],
+
+
+    # IT Service Desk and Customer Support
+    "service desk": ["service desk", "service desk support"],
+    "help desk": ["help desk", "helpdesk"],
+    "end-user support": ["end-user support", "end user support"],
+    "technical support": ["technical support", "IT support"],
+    "troubleshooting": ["troubleshooting", "troubleshoot"],
+    "customer service": ["customer service", "customer support"],
+    "ticket management": ["ticket management", "ticket logging"],
+    "incident management": ["incident management", "incident handling"],
+    "service request management": ["service request management", "service requests"],
+    "escalation management": ["escalation management", "escalate", "escalation"],
+    "sla": ["sla", "service level agreement"],
+    "turnaround time": ["turnaround time", "tat"],
+    "mis reporting": ["mis reporting", "management information system"],
+    "documentation": ["documentation", "documenting"],
+    "problem resolution": ["problem resolution", "issue resolution"],
+    "hardware support": ["hardware support", "hardware troubleshooting"],
+    "software support": ["software support", "software troubleshooting"],
+    "email support": ["email support"],
+    "chat support": ["chat support"],
+    "call handling": ["call handling", "handling calls"],
+    "customer communication": ["customer communication", "customer interactions"],
+    "process improvement": ["process improvement", "process improvements"],
+    "follow-up": ["follow-up", "follow up"],
+    "itil": ["itil", "IT infrastructure library"],
+    "service level management": ["service level management"],
+
 
     # Frontend development
     "html": ["html", "html5"],
@@ -287,6 +334,80 @@ def find_skills(text: str) -> list[str]:
     return found
 
 
+def extract_ai_skills(text: str, source_type: str) -> list[str]:
+    """Extract explicit skills using Groq, including domain-specific skills."""
+
+    if groq_client is None or not text.strip():
+        return []
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a skill extraction assistant for a resume "
+                        "and job matching system. Extract skills explicitly "
+                        "mentioned in the supplied text. Support ALL job "
+                        "domains, including software, engineering, healthcare, "
+                        "finance, business, customer support, operations, "
+                        "and other professions. Include relevant technical "
+                        "skills, tools, domain knowledge, methods, "
+                        "certifications, and interpersonal skills when stated. "
+                        "Do not invent skills or infer that someone possesses "
+                        "a skill merely from a job title or responsibility. "
+                        "Return a JSON object with one key, 'skills', containing "
+                        "a list of concise skill names. Remove duplicates."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({
+                        "source_type": source_type,
+                        "text": text[:15000],
+                    }),
+                },
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content
+        if not content:
+            return []
+
+        data = json.loads(content)
+        raw_skills = data.get("skills", [])
+
+        if not isinstance(raw_skills, list):
+            return []
+
+        # Map recognized aliases back to existing canonical skill names.
+        alias_map = {}
+        for skill, aliases in SKILL_ALIASES.items():
+            alias_map[skill.lower()] = skill
+            for alias in aliases:
+                alias_map[alias.lower().strip()] = skill
+
+        extracted = []
+        for item in raw_skills[:80]:
+            if not isinstance(item, str):
+                continue
+
+            name = re.sub(r"\s+", " ", item.strip().lower())
+            if not name or len(name) > 100:
+                continue
+
+            canonical_name = alias_map.get(name, name)
+            if canonical_name not in extracted:
+                extracted.append(canonical_name)
+
+        return extracted
+
+    except Exception as exc:
+        print(f"Groq skill extraction error ({source_type}): {exc}")
+        return []
+
 
 # Skill categories help explain what the resume matches.
 SKILL_CATEGORIES = {
@@ -306,6 +427,67 @@ SKILL_CATEGORIES = {
         "ruby on rails", "rest api", "graphql", "grpc",
         "microservices", "websockets", "oauth", "jwt",
     ],
+
+
+    "IT Service Desk and Support": [
+        "service desk",
+        "help desk",
+        "end-user support",
+        "technical support",
+        "troubleshooting",
+        "customer service",
+        "ticket management",
+        "incident management",
+        "service request management",
+        "escalation management",
+        "sla",
+        "turnaround time",
+        "mis reporting",
+        "documentation",
+        "problem resolution",
+        "hardware support",
+        "software support",
+        "email support",
+        "chat support",
+        "call handling",
+        "customer communication",
+        "process improvement",
+        "follow-up",
+        "itil",
+        "service level management",
+    ],
+
+
+    "Medical Laboratory Science": [
+        "hematology",
+        "clinical biochemistry",
+        "microbiology",
+        "sample handling",
+        "laboratory safety",
+        "clinical pathology",
+        "phlebotomy",
+        "specimen collection",
+        "blood banking",
+        "immunology",
+        "parasitology",
+        "laboratory quality control",
+        "biosafety procedures",
+        "urinalysis",
+    ],
+
+    "Quality and Laboratory Operations": [
+        "quality control",
+        "quality assurance",
+        "standard operating procedures",
+        "laboratory information management system",
+        "lims",
+        "calibration",
+        "biosafety",
+        "infection control",
+        "record keeping",
+    ],
+
+
     "Databases": [
         "sql", "mysql", "postgresql", "sqlite", "mongodb", "redis",
         "oracle database", "microsoft sql server", "cassandra",
@@ -404,32 +586,164 @@ ROLE_RULES = {
 }
 
 
-def detect_job_role(job_description: str) -> str:
-    """Detect a role from explicit job-title phrases when possible."""
-    normalized = job_description.lower()
 
-    # Prefer a recognizable job title near the beginning.
-    # This reduces the chance that a passing mention later determines
-    # the role.
+def detect_job_role(job_description: str) -> str:
+    """Detect a job role using existing rules, then Groq if needed."""
+
+    normalized = job_description.lower()
     opening = normalized[:500]
 
+    # First, use the existing rules for known roles.
     for role, phrases in ROLE_RULES.items():
         for phrase in phrases:
             pattern = r"(?<!\w)" + re.escape(phrase) + r"(?!\w)"
             if re.search(pattern, opening):
                 return role
 
+    # If the existing rules don't recognize the role, ask Groq.
+    if groq_client is None or not job_description.strip():
+        return "Other"
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Identify the primary job role from the job description. "
+                        "Return JSON only with one key, 'job_role', containing "
+                        "a concise, specific job title. Do not return skills, "
+                        "explanations, or multiple roles. If the role cannot "
+                        "reasonably be identified, return 'Other'."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": job_description[:10000],
+                },
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content
+        if content:
+            data = json.loads(content)
+            role = data.get("job_role")
+
+            if (
+                isinstance(role, str)
+                and role.strip()
+                and len(role.strip()) <= 100
+            ):
+                return role.strip()
+
+    except Exception as exc:
+        print(f"Groq job-role detection error: {exc}")
+
     return "Other"
 
 
+
+
 def get_skill_breakdown(skills: list[str]) -> dict:
-    """Group recognized skills by category."""
+    """Use Groq AI to categorize skills dynamically."""
+
+    if not skills:
+        return {}
+
+    # Fall back to predefined categories if AI is unavailable.
+    if groq_client is None:
+        return _get_rule_based_skill_breakdown(skills)
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a skill categorization assistant. "
+                        "Group the supplied skills into meaningful categories "
+                        "appropriate to their professional domain. Support all "
+                        "industries. Create category names dynamically rather "
+                        "than relying on a fixed list. Every input skill must "
+                        "appear exactly once. Do not invent or rename skills. "
+                        "Return valid JSON with one key, 'categories', whose "
+                        "value is an object mapping category names to lists "
+                        "of skill names."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({"skills": skills}),
+                },
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        content = response.choices[0].message.content
+        if not content:
+            return _get_rule_based_skill_breakdown(skills)
+
+        data = json.loads(content)
+        categories = data.get("categories")
+
+        if not isinstance(categories, dict):
+            return _get_rule_based_skill_breakdown(skills)
+
+        # Match AI results to the original skill names.
+        allowed = {skill.casefold(): skill for skill in skills}
+        breakdown = {}
+        assigned = set()
+
+        for category, items in categories.items():
+            if not isinstance(category, str) or not isinstance(items, list):
+                continue
+
+            found = []
+            for item in items:
+                if not isinstance(item, str):
+                    continue
+
+                original = allowed.get(item.casefold())
+                if original and original not in assigned:
+                    found.append(original)
+                    assigned.add(original)
+
+            if found:
+                breakdown[category] = {
+                    "count": len(found),
+                    "skills": found,
+                }
+
+        # Preserve any skills the AI omitted.
+        remaining = [
+            skill for skill in skills if skill not in assigned
+        ]
+        if remaining:
+            breakdown["Other Skills"] = {
+                "count": len(remaining),
+                "skills": remaining,
+            }
+
+        return breakdown
+
+    except Exception as exc:
+        print(f"Groq skill categorization error: {exc}")
+        return _get_rule_based_skill_breakdown(skills)
+
+
+def _get_rule_based_skill_breakdown(skills: list[str]) -> dict:
+    """Fallback categorization using predefined skill categories."""
+
     breakdown = {}
+    assigned = set()
 
     for category, category_skills in SKILL_CATEGORIES.items():
         found = [
             skill for skill in skills
-            if skill in category_skills
+            if skill in category_skills and skill not in assigned
         ]
 
         if found:
@@ -437,8 +751,17 @@ def get_skill_breakdown(skills: list[str]) -> dict:
                 "count": len(found),
                 "skills": found,
             }
+            assigned.update(found)
+
+    remaining = [skill for skill in skills if skill not in assigned]
+    if remaining:
+        breakdown["Other Skills"] = {
+            "count": len(remaining),
+            "skills": remaining,
+        }
 
     return breakdown
+
 
 
 
@@ -486,10 +809,71 @@ def generate_recommendations(
                 f"a {job_role} role."
             ),
         })
-
     return recommendations
 
+def generate_ai_feedback(
+    resume_text: str,
+    job_description: str,
+    matched_skills: list[str],
+    missing_skills: list[str],
+) -> dict:
+    """Generate personalized resume feedback using Groq."""
 
+    if groq_client is None:
+        raise RuntimeError("GROQ_API_KEY is not configured.")
+
+    response = groq_client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {"role": "system", "content": "You are an expert resume reviewer. Return valid JSON only with keys: overall_feedback, strengths, improvements, resume_tips."},
+            {
+                "role": "user",
+                "content": json.dumps({
+                    "resume": resume_text[:15000],
+                    "job_description": job_description[:10000],
+                    "matched_skills": matched_skills,
+                    "missing_skills": missing_skills,
+                }),
+            },
+        ],
+        response_format={"type": "json_object"},
+    )
+
+    feedback_text = response.choices[0].message.content
+    if not feedback_text:
+        raise ValueError("Groq returned an empty response.")
+
+    feedback = json.loads(feedback_text)
+
+    expected_keys = {
+        "overall_feedback",
+        "strengths",
+        "improvements",
+        "resume_tips",
+    }
+
+    if not isinstance(feedback, dict) or not expected_keys.issubset(feedback):
+        raise ValueError("Groq returned an unexpected feedback format.")
+
+    if not isinstance(feedback["overall_feedback"], str):
+        raise ValueError("Invalid overall feedback format.")
+
+
+    for key in ("strengths", "improvements", "resume_tips"):
+        value = feedback.get(key)
+
+        # Accept a single string by converting it into a list.
+        if isinstance(value, str):
+            feedback[key] = [value]
+
+        # Reject invalid types and unexpected nested structures.
+        elif not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError(f"Invalid {key} format.")
+
+
+    return feedback
 
 
 def get_skill_weight(skill: str, job_description: str) -> int:
@@ -681,19 +1065,34 @@ async def analyze_resume(
             ),
         )
 
+
     # 3. Detect skills and the job role.
-    resume_skills = find_skills(resume_text)
-    job_skills = find_skills(job_description)
+    # Combine rule-based and AI-discovered skills.
+    resume_rule_skills = find_skills(resume_text)
+    job_rule_skills = find_skills(job_description)
+
+    resume_ai_skills = extract_ai_skills(resume_text, "resume")
+    job_ai_skills = extract_ai_skills(job_description, "job_description")
+
+    resume_skills = list(dict.fromkeys(
+        resume_rule_skills + resume_ai_skills
+    ))
+    job_skills = list(dict.fromkeys(
+        job_rule_skills + job_ai_skills
+    ))
+
     job_role = detect_job_role(job_description)
 
     matched_skills = [
         skill for skill in job_skills
         if skill in resume_skills
     ]
+
     missing_skills = [
         skill for skill in job_skills
         if skill not in resume_skills
     ]
+
 
     # 4. Calculate weighted skill coverage.
     skill_weights = {
@@ -724,9 +1123,28 @@ async def analyze_resume(
         job_role,
     )
 
-    # 6. Return all fields used by the frontend.
+    # 6. Generate AI-powered resume feedback using Groq.
+    ai_feedback = None
+    ai_feedback_error = None
+
+    try:
+        ai_feedback = generate_ai_feedback(
+            resume_text=resume_text,
+            job_description=job_description,
+            matched_skills=matched_skills,
+            missing_skills=missing_skills,
+        )
+    except Exception as e:
+        # Keep the existing analysis available if Groq fails.
+        print(f"Groq AI feedback error: {e}")
+        ai_feedback_error = "AI feedback is temporarily unavailable."
+
+
+    # 7. Return all fields used by the frontend.
     result =  {
         "filename": resume.filename,
+        "ai_feedback": ai_feedback,
+        "ai_feedback_error": ai_feedback_error,
         "match_score": match_score,
         "matched_skill_weight": matched_skill_weight,
         "total_skill_weight": total_skill_weight,
