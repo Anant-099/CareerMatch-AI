@@ -1,5 +1,13 @@
 # CareerMatch AI
 
+# CareerMatch AI
+
+### 🚀 [**LIVE DEMO — Try CareerMatch AI Here**](https://career-match-ai-bay.vercel.app/)
+
+AI-powered resume and job description matching platform that helps users analyze skills, identify gaps, and get AI-generated resume feedback.
+
+**[🌐 Open Application](https://career-match-ai-bay.vercel.app/)** | **[📂 View Source Code](https://github.com/Anant-099/CareerMatch-AI)**
+
 **AI-Powered Resume and Job Description Matching Platform**
 
 CareerMatch AI is a web application that analyzes a resume against a job description, calculates a skill-based match score, identifies matching and missing skills, and provides recommendations to help users improve their resumes.
