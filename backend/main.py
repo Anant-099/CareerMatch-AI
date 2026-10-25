@@ -37,6 +37,14 @@ from pypdf import PdfReader
 
 app = FastAPI(title="CareerMatch AI API")
 
+@app.get("/")
+def root():
+    return {
+        "message": "Welcome to CareerMatch AI API",
+        "status": "running",
+        "docs": "/docs"
+    }
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
