@@ -12,8 +12,10 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import Base, engine, get_db
 from models import AnalysisHistory
+
+Base.metadata.create_all(bind=engine)
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
