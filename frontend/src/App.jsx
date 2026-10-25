@@ -2,8 +2,10 @@
 import { useState } from "react";
 import "./App.css";
 
-const API_URL = "http://127.0.0.1:8000/api/analyze";
-const HISTORY_URL = "http://127.0.0.1:8000/api/history";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL = `${API_BASE_URL}/api/analyze`;
+const HISTORY_URL = `${API_BASE_URL}/api/history`;
+
 
 function App() {
   const [resume, setResume] = useState(null);
