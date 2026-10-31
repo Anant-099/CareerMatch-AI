@@ -1,7 +1,5 @@
 # CareerMatch AI
 
-# CareerMatch AI
-
 ### 🚀 [**LIVE DEMO — Try CareerMatch AI Here**](https://career-match-ai-bay.vercel.app/)
 
 AI-powered resume and job description matching platform that helps users analyze skills, identify gaps, and get AI-generated resume feedback.
